@@ -22,3 +22,13 @@ variable "vnet_address_spaces" {
   description = "Address spaces for the platform virtual networks."
   type        = map(string)
 }
+
+variable "subnets" {
+  description = "Configuration for platform subnets."
+
+  type = map(object({
+    vnet_key                   = string
+    address_prefix             = string
+    delegate_to_container_apps = bool
+  }))
+}
