@@ -32,3 +32,12 @@ variable "subnets" {
     delegate_to_container_apps = bool
   }))
 }
+
+variable "peerings" {
+  description = "Virtual network peering configuration."
+
+  type = map(object({
+    source = string
+    target = string
+  }))
+}
