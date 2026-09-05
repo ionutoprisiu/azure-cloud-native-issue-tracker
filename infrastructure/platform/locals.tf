@@ -60,4 +60,11 @@ locals {
       target = "backend"
     }
   }
+
+  network_security_groups = toset([
+    "hub-nva",
+    "frontend",
+    "backend",
+    "data"
+  ])
 }

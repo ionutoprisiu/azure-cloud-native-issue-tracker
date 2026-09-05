@@ -117,5 +117,43 @@ resource "azurerm_subnet_route_table_association" "platform" {
   route_table_id = azurerm_route_table.platform[each.key].id
 }
 
+resource "azurerm_container_registry" "platform" {
+  name                = "cr${var.project}${var.environment}${local.region}001"
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
 
+  sku           = "Basic"
+  admin_enabled = false
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "platform" {
+  name                = "kv-${var.project}-${var.environment}-${local.region}-001"
+  location            = azurerm_resource_group.platform.location
+  resource_group_name = azurerm_resource_group.platform.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+
+  sku_name = "standard"
+
+  rbac_authorization_enabled = true
+
+  soft_delete_retention_days    = 7
+  public_network_access_enabled = true
+}
+
+resource "azurerm_network_security_group" "platform" {
+  for_each = local.network_security_groups
+
+  name                = "nsg-${var.project}-${each.key}-${var.environment}-${local.region}-001"
+  location            = azurerm_resource_group.platform.location
+  resource_group_name = azurerm_resource_group.platform.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "platform" {
+  for_each = local.network_security_groups
+
+  subnet_id                 = azurerm_subnet.platform[each.key].id
+  network_security_group_id = azurerm_network_security_group.platform[each.key].id
+}
 
