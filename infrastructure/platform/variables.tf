@@ -13,11 +13,6 @@ variable "location" {
   type        = string
 }
 
-variable "region" {
-  description = "Short region code used in resource naming."
-  type        = string
-}
-
 variable "vnet_address_spaces" {
   description = "Address spaces for the platform virtual networks."
   type        = map(string)
@@ -33,11 +28,22 @@ variable "subnets" {
   }))
 }
 
-variable "peerings" {
-  description = "Virtual network peering configuration."
+variable "nva_private_ip" {
+  description = "Static private IP address of the network virtual appliance."
+  type        = string
+}
 
-  type = map(object({
-    source = string
-    target = string
-  }))
+variable "nva_vm_size" {
+  description = "Size of the NVA virtrual machine."
+  type        = string
+}
+
+variable "nva_admin_username" {
+  description = "Administrator username for the NVA virtual machine."
+  type        = string
+}
+
+variable "nva_ssh_public_key" {
+  description = "SSH public key used to access the NVA virtual machine."
+  type        = string
 }

@@ -1,0 +1,9 @@
+#cloud-config
+
+write_files:
+  - path: /etc/sysctl.d/99-nva.conf
+    content: |
+      net.ipv4.ip_forward=1
+
+runcmd:
+  - sysctl --system
