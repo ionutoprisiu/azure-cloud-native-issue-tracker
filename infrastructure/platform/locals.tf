@@ -1,5 +1,5 @@
 locals {
-  region = "swc"
+  region = "frc"
 
   peerings = {
     hub_to_frontend = {

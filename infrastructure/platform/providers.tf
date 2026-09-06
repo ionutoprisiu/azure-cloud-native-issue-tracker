@@ -6,8 +6,8 @@ terraform {
     }
   }
   backend "azurerm" {
-    resource_group_name  = "rg-cit-bootstrap-dev-swc-001"
-    storage_account_name = "stcittfstatedev001"
+    resource_group_name  = "rg-cit-bootstrap-dev-neu-001"
+    storage_account_name = "stcittfstatedev"
     container_name       = "tfstate"
     key                  = "platform.tfstate"
   }

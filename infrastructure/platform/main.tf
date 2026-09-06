@@ -118,7 +118,7 @@ resource "azurerm_subnet_route_table_association" "platform" {
 }
 
 resource "azurerm_container_registry" "platform" {
-  name                = "cr${var.project}${var.environment}${local.region}001"
+  name                = "cr${var.project}${var.environment}${local.region}"
   resource_group_name = azurerm_resource_group.platform.name
   location            = azurerm_resource_group.platform.location
 

@@ -4,7 +4,7 @@ resource "azurerm_resource_group" "bootstrap" {
 }
 
 resource "azurerm_storage_account" "tfstate" {
-  name                     = "st${var.project}tfstate${var.environment}001"
+  name                     = "st${var.project}tfstate${var.environment}"
   resource_group_name      = azurerm_resource_group.bootstrap.name
   location                 = azurerm_resource_group.bootstrap.location
   account_tier             = "Standard"
