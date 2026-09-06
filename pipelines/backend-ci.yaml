@@ -1,0 +1,15 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - bash: |
+      cd app/backend
+      docker build -t issue-tracker-backend:test .
+    displayName: Build backend Docker image 
