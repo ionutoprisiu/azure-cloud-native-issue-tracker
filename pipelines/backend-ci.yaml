@@ -48,3 +48,18 @@ steps:
 
         docker push \
           crcitdevfrc.azurecr.io/backend:latest
+
+  - task: AzureCLI@2
+    displayName: Deploy backend to Container Apps
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        az containerapp update \
+          --name ca-cit-backend-dev-frc-001 \
+          --resource-group rg-cit-workload-dev-frc-001 \
+          --image crcitdevfrc.azurecr.io/backend:latest \
+          --revision-suffix build-$(Build.BuildId)
