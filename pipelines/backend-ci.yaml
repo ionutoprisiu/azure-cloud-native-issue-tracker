@@ -63,3 +63,22 @@ steps:
           --resource-group rg-cit-workload-dev-frc-001 \
           --image crcitdevfrc.azurecr.io/backend:latest \
           --revision-suffix build-$(Build.BuildId)
+
+  - task: AzureCLI@2
+    displayName: Verify deployed backend health
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        FQDN=$(az containerapp show \
+          --name ca-cit-backend-dev-frc-001 \
+          --resource-group rg-cit-workload-dev-frc-001 \
+          --query properties.configuration.ingress.fqdn \
+          --output tsv)
+
+        echo "Checking https://$FQDN/health"
+
+        curl --fail "https://$FQDN/health"
