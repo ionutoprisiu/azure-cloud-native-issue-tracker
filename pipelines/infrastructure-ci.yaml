@@ -1,0 +1,41 @@
+trigger:
+  branches:
+    include:
+      - main
+  
+  paths:
+    include:
+      - infrastructure/platform/**
+      - infrastructure/workload/**
+      - pipelines/infrastructure-ci.yaml
+    
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - bash: |
+      set -e 
+
+      terraform fmt -check -recursive infrastructure/platform
+      terraform fmt -check -recursive infrastructure/workload
+    displayName: Check Terraform formatting
+
+  - bash: |
+      set -e 
+
+      cd infrastructure/platform
+
+      terraform init -backend=false
+      terraform validate 
+    displayName: Validate platform Terraform 
+
+  - bash: |
+      set -e 
+
+      cd infrastructure/workload
+
+      terraform init -backend=false
+      terraform validate
+    displayName: Validate workload Terraform 
