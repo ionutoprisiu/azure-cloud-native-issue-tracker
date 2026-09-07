@@ -12,44 +12,151 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-steps:
-  - checkout: self
+stages:
+  - stage: Validate
+    displayName: Validate Terraform 
+    jobs:
+      - job: ValidateTerraform
+        displayName: Validate Terraform configuration
+        steps:
+          - checkout: self
 
-  - bash: |
-      set -e
+          - bash: |
+              set -e
 
-      wget -O- https://apt.releases.hashicorp.com/gpg | \
-        gpg --dearmor | \
-        sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
 
-      echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
-        sudo tee /etc/apt/sources.list.d/hashicorp.list
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
 
-      sudo apt update
-      sudo apt install -y terraform
-    displayName: Install Terraform
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
 
-  - bash: |
-      set -e 
+          - bash: |
+              set -e 
 
-      terraform fmt -check -recursive infrastructure/platform
-      terraform fmt -check -recursive infrastructure/workload
-    displayName: Check Terraform formatting
+              terraform fmt -check -recursive infrastructure/platform
+              terraform fmt -check -recursive infrastructure/workload
+            displayName: Check Terraform formatting
 
-  - bash: |
-      set -e 
+          - bash: |
+              set -e 
 
-      cd infrastructure/platform
+              cd infrastructure/platform
 
-      terraform init -backend=false
-      terraform validate 
-    displayName: Validate platform Terraform 
+              terraform init -backend=false
+              terraform validate 
+            displayName: Validate platform Terraform 
 
-  - bash: |
-      set -e 
+          - bash: |
+              set -e 
 
-      cd infrastructure/workload
+              cd infrastructure/workload
 
-      terraform init -backend=false
-      terraform validate
-    displayName: Validate workload Terraform 
+              terraform init -backend=false
+              terraform validate
+            displayName: Validate workload Terraform 
+
+  - stage: PlanPlatform
+    displayName: Plan Platform
+    dependsOn: Validate
+    jobs:
+      - job: PlanPlatform
+        displayName: Terraform plan platform
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -e 
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+
+          - task: AzureCLI@2
+            displayName: Terraform plan platform  
+            inputs: 
+              azureSubscription: sc-cit-azure
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e 
+
+                cd infrastructure/platform
+
+                terraform init
+                terraform plan -out=tfplan
+
+          - publish: infrastructure/platform/tfplan
+            artifact: platform-plan
+            displayName: Publish platform plan
+
+  - stage: ApprovePlatform
+    displayName: Approve Platform
+    dependsOn: PlanPlatform
+    jobs:
+      - job: WaitForApproval
+        displayName: Review platform plan
+        pool: server
+        steps:
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: ''
+              instructions: 'Review the Terraform platform plan and approve before applying.'
+              onTimeout: reject
+
+          
+  - stage: ApplyPlatform
+    displayName: Apply Platform
+    dependsOn: ApprovePlatform
+    jobs: 
+      - job: ApplyPlatform
+        displayName: Terraform apply platform
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -e 
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+
+          - download: current
+            artifact: platform-plan
+            displayName: Download platform plan
+
+          - task: AzureCLI@2
+            displayName: Terraform apply platform
+            inputs:
+              azureSubscription: sc-cit-azure
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e 
+
+                cd infrastructure/platform
+
+                terraform init
+
+                terraform apply  "$(Pipeline.Workspace)/platform-plan/tfplan"
+        
+
+
