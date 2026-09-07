@@ -14,7 +14,7 @@ locals {
     }
 
     backend = {
-      image            = "backend:v1"
+      image            = "backend:latest"
       target_port      = 8000
       external_enabled = true
     }
