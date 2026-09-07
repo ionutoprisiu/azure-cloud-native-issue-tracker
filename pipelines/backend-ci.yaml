@@ -12,4 +12,14 @@ steps:
   - bash: |
       cd app/backend
       docker build -t issue-tracker-backend:test .
-    displayName: Build backend Docker image 
+    displayName: Build backend Docker image
+  
+  - bash: |
+      docker run -d --name backend-test -p 8000:8000 issue-tracker-backend:test
+
+      sleep 5
+
+      curl --fail http://localhost:8000/health
+    displayName: Test backend container
+
+    
