@@ -2,24 +2,66 @@ trigger:
   branches:
     include:
       - main
-  
+
   paths:
     include:
-      - infrastructure/platform/**
       - infrastructure/workload/**
-      - pipelines/infrastructure-ci.yaml
-    
+      - pipelines/workload-cicd.yaml
+
+resources:
+  pipelines:
+    - pipeline: platform
+      source: platform-cicd 
+      trigger:
+        branches:
+          include:
+            - main
+
 pool:
   vmImage: ubuntu-latest
 
 stages:
   - stage: Validate
-    displayName: Validate Terraform 
+    displayName: Validate workload
     jobs:
-      - job: ValidateTerraform
-        displayName: Validate Terraform configuration
+      - job: ValidateWorkload
+        displayName: Validate workload Terraform
         steps:
           - checkout: self
+
+          - bash: |
+              set -e 
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+          
+          - bash: |
+              set -e 
+
+              terraform fmt -check -recursive infrastructure/workload 
+
+              cd infrastructure/workload
+
+              terraform init -backend=false 
+              terraform validate 
+            displayName: Validate workload Terraform
+
+  - stage: PlanWorkload
+    displayName: Plan Workload 
+    dependsOn: Validate
+    jobs:
+      - job: PlanWorkload 
+        displayName: Terraform plan workload
+        steps: 
+          - checkout: self 
 
           - bash: |
               set -e
@@ -35,98 +77,49 @@ stages:
               sudo apt install -y terraform
             displayName: Install Terraform
 
-          - bash: |
-              set -e 
-
-              terraform fmt -check -recursive infrastructure/platform
-              terraform fmt -check -recursive infrastructure/workload
-            displayName: Check Terraform formatting
-
-          - bash: |
-              set -e 
-
-              cd infrastructure/platform
-
-              terraform init -backend=false
-              terraform validate 
-            displayName: Validate platform Terraform 
-
-          - bash: |
-              set -e 
-
-              cd infrastructure/workload
-
-              terraform init -backend=false
-              terraform validate
-            displayName: Validate workload Terraform 
-
-  - stage: PlanPlatform
-    displayName: Plan Platform
-    dependsOn: Validate
-    jobs:
-      - job: PlanPlatform
-        displayName: Terraform plan platform
-        steps:
-          - checkout: self
-
-          - bash: |
-              set -e 
-
-              wget -O- https://apt.releases.hashicorp.com/gpg | \
-                gpg --dearmor | \
-                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
-
-              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
-                sudo tee /etc/apt/sources.list.d/hashicorp.list
-
-              sudo apt update
-              sudo apt install -y terraform
-            displayName: Install Terraform
-
           - task: AzureCLI@2
-            displayName: Terraform plan platform  
-            inputs: 
+            displayName: Terraform plan workload
+            inputs:
               azureSubscription: sc-cit-azure
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
                 set -e 
 
-                cd infrastructure/platform
+                cd infrastructure/workload
 
                 terraform init
                 terraform plan -out=tfplan
+          
+          - publish: infrastructure/workload/tfplan
+            artifact: workload-plan 
+            displayName: Publish workload plan 
 
-          - publish: infrastructure/platform/tfplan
-            artifact: platform-plan
-            displayName: Publish platform plan
-
-  - stage: ApprovePlatform
-    displayName: Approve Platform
-    dependsOn: PlanPlatform
+  - stage: ApproveWorkload
+    displayName: Approve Workload
+    dependsOn: PlanWorkload
     jobs:
       - job: WaitForApproval
-        displayName: Review platform plan
+        displayName: Review workload plan
         pool: server
         steps:
           - task: ManualValidation@1
             inputs:
               notifyUsers: ''
-              instructions: 'Review the Terraform platform plan and approve before applying.'
+              instructions: 'Review the Terraform workload plan and approve before applying.'
               onTimeout: reject
 
-          
-  - stage: ApplyPlatform
-    displayName: Apply Platform
-    dependsOn: ApprovePlatform
-    jobs: 
-      - job: ApplyPlatform
-        displayName: Terraform apply platform
-        steps:
-          - checkout: self
+  - stage: ApplyWorkload
+    displayName: Apply Workload
+    dependsOn: ApproveWorkload
+    jobs:
+      - job: ApplyWorkload
+        displayName: Terraform apply workload 
+        steps: 
+          - checkout: self 
 
           - bash: |
-              set -e 
+              set -e
 
               wget -O- https://apt.releases.hashicorp.com/gpg | \
                 gpg --dearmor | \
@@ -140,11 +133,11 @@ stages:
             displayName: Install Terraform
 
           - download: current
-            artifact: platform-plan
-            displayName: Download platform plan
+            artifact: workload-plan
+            displayName: Download workload plan
 
           - task: AzureCLI@2
-            displayName: Terraform apply platform
+            displayName: Terraform apply workload 
             inputs:
               azureSubscription: sc-cit-azure
               scriptType: bash
@@ -152,11 +145,8 @@ stages:
               inlineScript: |
                 set -e 
 
-                cd infrastructure/platform
+                cd infrastructure/workload
 
                 terraform init
 
-                terraform apply  "$(Pipeline.Workspace)/platform-plan/tfplan"
-        
-
-
+                terraform apply "$(Pipeline.Workspace)/workload-plan/tfplan"
