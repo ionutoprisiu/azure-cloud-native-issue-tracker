@@ -9,6 +9,17 @@ data "terraform_remote_state" "platform" {
   }
 }
 
+data "terraform_remote_state" "data" {
+  backend = "azurerm"
+
+  config = {
+    resource_group_name  = "rg-cit-bootstrap-dev-neu-001"
+    storage_account_name = "stcittfstatedev"
+    container_name       = "tfstate"
+    key                  = "data.tfstate"
+  }
+}
+
 resource "azurerm_resource_group" "workload" {
   name     = "rg-${var.project}-workload-${var.environment}-${local.region}-001"
   location = var.location
@@ -43,11 +54,9 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_id         = azurerm_user_assigned_identity.workload[each.key].principal_id
 }
 
-resource "azurerm_container_app" "workload" {
-  for_each = local.container_apps
-
-  name                         = "ca-${var.project}-${each.key}-${var.environment}-${local.region}-001"
-  container_app_environment_id = azurerm_container_app_environment.workload[each.key].id
+resource "azurerm_container_app" "frontend" {
+  name                         = "ca-${var.project}-frontend-${var.environment}-${local.region}-001"
+  container_app_environment_id = azurerm_container_app_environment.workload["frontend"].id
   resource_group_name          = azurerm_resource_group.workload.name
   revision_mode                = "Single"
   workload_profile_name        = "Consumption"
@@ -56,27 +65,27 @@ resource "azurerm_container_app" "workload" {
     type = "UserAssigned"
 
     identity_ids = [
-      azurerm_user_assigned_identity.workload[each.key].id
+      azurerm_user_assigned_identity.workload["frontend"].id
     ]
   }
 
   registry {
     server   = data.terraform_remote_state.platform.outputs.acr_login_server
-    identity = azurerm_user_assigned_identity.workload[each.key].id
+    identity = azurerm_user_assigned_identity.workload["frontend"].id
   }
 
   template {
     container {
-      name   = each.key
-      image  = "${data.terraform_remote_state.platform.outputs.acr_login_server}/${each.value.image}"
+      name   = "frontend"
+      image  = "${data.terraform_remote_state.platform.outputs.acr_login_server}/${local.frontend_image}"
       cpu    = 0.25
       memory = "0.5Gi"
     }
   }
 
   ingress {
-    external_enabled = each.value.external_enabled
-    target_port      = each.value.target_port
+    external_enabled = true
+    target_port      = 80
 
     traffic_weight {
       percentage      = 100
@@ -85,6 +94,62 @@ resource "azurerm_container_app" "workload" {
   }
 
   depends_on = [
-    azurerm_role_assignment.acr_pull
+    azurerm_role_assignment.acr_pull["frontend"]
+  ]
+}
+
+resource "azurerm_container_app" "backend" {
+  name                         = "ca-${var.project}-backend-${var.environment}-${local.region}-001"
+  container_app_environment_id = azurerm_container_app_environment.workload["backend"].id
+  resource_group_name          = azurerm_resource_group.workload.name
+  revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
+
+  identity {
+    type = "UserAssigned"
+
+    identity_ids = [
+      azurerm_user_assigned_identity.workload["backend"].id
+    ]
+  }
+
+  registry {
+    server   = data.terraform_remote_state.platform.outputs.acr_login_server
+    identity = azurerm_user_assigned_identity.workload["backend"].id
+  }
+
+  template {
+    container {
+      name   = "backend"
+      image  = "${data.terraform_remote_state.platform.outputs.acr_login_server}/${local.backend_image}"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      env {
+        name  = "POSTGRES_HOST"
+        value = data.terraform_remote_state.data.outputs.postgresql_fqdn
+      }
+
+      env {
+        name  = "POSTGRES_DB"
+        value = data.terraform_remote_state.data.outputs.postgresql_database_name
+      }
+    }
+
+
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8000
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+
+  depends_on = [
+    azurerm_role_assignment.acr_pull["backend"]
   ]
 }

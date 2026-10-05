@@ -6,17 +6,6 @@ locals {
     "backend"
   ])
 
-  container_apps = {
-    frontend = {
-      image            = "hello:latest"
-      target_port      = 80
-      external_enabled = true
-    }
-
-    backend = {
-      image            = "backend:latest"
-      target_port      = 8000
-      external_enabled = true
-    }
-  }
+  frontend_image = "hello:latest"
+  backend_image  = "backend:latest"
 }
