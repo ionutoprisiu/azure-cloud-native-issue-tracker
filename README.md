@@ -2,10 +2,28 @@
 
 Cloud-native issue tracker built on Microsoft Azure using Terraform, Azure Container Apps, Docker and Azure DevOps CI/CD.
 
-The project is focused mainly on DevOps and cloud engineering rather than application complexity. The application consists of a React frontend and a FastAPI backend, both containerized with Docker and deployed to Azure Container Apps.
+The project focuses primarily on DevOps and cloud engineering rather than application complexity. The application consists of a React frontend and a FastAPI backend, both containerized with Docker.
 
-The infrastructure is provisioned with Terraform and organized into separate platform and workload layers. It includes Azure networking, Azure Container Registry, managed identities, RBAC and remote Terraform state stored in Azure Blob Storage.
+Infrastructure is provisioned with Terraform and separated into four layers:
 
-Azure DevOps pipelines are used to validate Terraform, generate and approve infrastructure plans, build and test Docker images, push them to Azure Container Registry and deploy new application revisions.
+- **bootstrap** – Azure Storage backend for Terraform remote state
+- **platform** – hub-and-spoke networking, routing, Azure Container Registry, Key Vault, managed identities and RBAC
+- **data** – Azure Database for PostgreSQL Flexible Server, Private Endpoint and Private DNS
+- **workload** – Azure Container Apps environments and application workloads
 
-Work in progress. PostgreSQL, private database connectivity, frontend CI/CD and additional infrastructure improvements are planned.
+The backend Container App is configured to consume the PostgreSQL private FQDN and database name from the data layer through Terraform remote state.
+
+Azure DevOps pipelines validate and plan Terraform changes, use manual approval gates before infrastructure apply, and build, test and deploy the backend container image.
+
+## Application
+
+- React + Vite frontend
+- FastAPI backend
+- PostgreSQL persistence
+- Docker containers
+
+## Current status
+
+Infrastructure code for the PostgreSQL data layer and private connectivity is implemented.
+
+The next steps are to complete the frontend integration and CI/CD, connect the FastAPI application to PostgreSQL, and replace the temporary frontend image in the workload configuration with the actual React application image.
