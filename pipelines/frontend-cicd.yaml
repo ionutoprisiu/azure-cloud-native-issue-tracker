@@ -1,0 +1,104 @@
+trigger:
+  branches:
+    include:
+      - main
+
+  paths:
+    include:
+      - app/frontend/**
+      - pipelines/frontend-cicd.yaml
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Build frontend Docker image
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        BACKEND_FQDN=$(az containerapp show \
+          --name ca-cit-backend-dev-frc-001 \
+          --resource-group rg-cit-workload-dev-frc-001 \
+          --query properties.configuration.ingress.fqdn \
+          --output tsv)
+
+        echo "Backend API: https://$BACKEND_FQDN"
+
+        docker build \
+          --build-arg VITE_API_URL="https://$BACKEND_FQDN" \
+          -t issue-tracker-frontend:test \
+          app/frontend
+
+  - bash: |
+      set -e
+
+      docker run -d \
+        --name frontend-test \
+        -p 8080:80 \
+        issue-tracker-frontend:test
+
+      trap 'docker rm -f frontend-test 2>/dev/null || true' EXIT
+
+      sleep 3
+
+      curl --fail http://localhost:8080
+    displayName: Test frontend container
+
+  - task: AzureCLI@2
+    displayName: Push frontend image to ACR
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        az acr login --name crcitdevfrc
+
+        docker tag \
+          issue-tracker-frontend:test \
+          crcitdevfrc.azurecr.io/frontend:latest
+
+        docker push \
+          crcitdevfrc.azurecr.io/frontend:latest
+
+  - task: AzureCLI@2
+    displayName: Deploy frontend to Container Apps
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        az containerapp update \
+          --name ca-cit-frontend-dev-frc-001 \
+          --resource-group rg-cit-workload-dev-frc-001 \
+          --image crcitdevfrc.azurecr.io/frontend:latest \
+          --revision-suffix build-$(Build.BuildId)
+
+  - task: AzureCLI@2
+    displayName: Verify deployed frontend
+    inputs:
+      azureSubscription: sc-cit-azure
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        FRONTEND_FQDN=$(az containerapp show \
+          --name ca-cit-frontend-dev-frc-001 \
+          --resource-group rg-cit-workload-dev-frc-001 \
+          --query properties.configuration.ingress.fqdn \
+          --output tsv)
+
+        echo "Checking https://$FRONTEND_FQDN"
+
+        curl --fail "https://$FRONTEND_FQDN"

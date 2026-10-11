@@ -27,3 +27,13 @@ output "private_dns_zone_id" {
   description = "Resource ID of the PostgreSQL Private DNS Zone."
   value       = azurerm_private_dns_zone.postgresql.id
 }
+
+output "postgresql_admin_login" {
+  description = "PostgreSQL administrator username."
+  value       = var.postgresql_admin_login
+}
+
+output "postgresql_password_secret_id" {
+  description = "Versionless Key Vault secret ID containing the PostgreSQL password."
+  value       = azurerm_key_vault_secret.postgresql_admin_password.versionless_id
+}

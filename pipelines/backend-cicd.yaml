@@ -22,14 +22,40 @@ steps:
   - bash: |
       set -e
 
-      docker run -d --name backend-test -p 8000:8000 issue-tracker-backend:test
+      docker network create backend-test-net
+
+      docker run -d \
+        --name postgres-test \
+        --network backend-test-net \
+        -e POSTGRES_DB=issue_tracker \
+        -e POSTGRES_USER=postgres \
+        -e POSTGRES_PASSWORD=postgres \
+        postgres:16
+
+      until docker exec postgres-test \
+        pg_isready -U postgres -d issue_tracker
+      do
+        sleep 2
+      done
+
+      docker run -d \
+        --name backend-test \
+        --network backend-test-net \
+        -p 8000:8000 \
+        -e POSTGRES_HOST=postgres-test \
+        -e POSTGRES_PORT=5432 \
+        -e POSTGRES_DB=issue_tracker \
+        -e POSTGRES_USER=postgres \
+        -e POSTGRES_PASSWORD=postgres \
+        -e POSTGRES_SSLMODE=prefer \
+        issue-tracker-backend:test
 
       sleep 5
 
       curl --fail http://localhost:8000/health
 
-      docker stop backend-test
-    displayName: Test backend container
+      docker rm -f backend-test postgres-test
+    displayName: Test backend with PostgreSQL
 
   - task: AzureCLI@2
     displayName: Push backend image to ACR

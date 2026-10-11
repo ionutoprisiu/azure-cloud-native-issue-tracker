@@ -7,3 +7,5 @@ postgresql_sku_name   = "B_Standard_B1ms"
 postgresql_storage_mb = 32768
 
 postgresql_database_name = "issue_tracker"
+
+postgresql_admin_login = "citadmin"

@@ -35,6 +35,12 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
   server_id = azurerm_postgresql_flexible_server.data.id
 }
 
+resource "azurerm_key_vault_secret" "postgresql_admin_password" {
+  name         = "postgresql-admin-password"
+  value        = var.postgresql_admin_password
+  key_vault_id = data.terraform_remote_state.platform.outputs.key_vault_id
+}
+
 resource "azurerm_private_dns_zone" "postgresql" {
   name                = "privatelink.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.data.name

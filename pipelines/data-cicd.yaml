@@ -1,0 +1,143 @@
+trigger:
+  branches:
+    include:
+      - main
+
+  paths:
+    include:
+      - infrastructure/data/**
+      - pipelines/data-cicd.yaml
+
+resources:
+  pipelines:
+    - pipeline: platform
+      source: platform-cicd
+      trigger:
+        branches:
+          include:
+            - main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Validate
+    displayName: Validate data
+    jobs:
+      - job: ValidateData
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -e
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+
+          - bash: |
+              set -e
+
+              terraform fmt -check -recursive infrastructure/data
+
+              cd infrastructure/data
+
+              terraform init -backend=false
+              terraform validate
+            displayName: Validate data Terraform
+
+  - stage: Plan
+    displayName: Plan data
+    dependsOn: Validate
+    jobs:
+      - job: PlanData
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -e
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+
+          - task: AzureCLI@2
+            displayName: Terraform plan data
+            env:
+              TF_VAR_postgresql_admin_password: $(POSTGRESQL_ADMIN_PASSWORD)
+            inputs:
+              azureSubscription: sc-cit-azure
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+
+                cd infrastructure/data
+
+                terraform init
+                terraform plan -no-color
+
+  - stage: Approve
+    displayName: Approve data
+    dependsOn: Plan
+    jobs:
+      - job: WaitForApproval
+        pool: server
+        steps:
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: ''
+              instructions: 'Review the PostgreSQL and private networking Terraform plan.'
+              onTimeout: reject
+
+  - stage: Apply
+    displayName: Apply data
+    dependsOn: Approve
+    jobs:
+      - job: ApplyData
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -e
+
+              wget -O- https://apt.releases.hashicorp.com/gpg | \
+                gpg --dearmor | \
+                sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+                sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+              sudo apt update
+              sudo apt install -y terraform
+            displayName: Install Terraform
+
+          - task: AzureCLI@2
+            displayName: Terraform apply data
+            env:
+              TF_VAR_postgresql_admin_password: $(POSTGRESQL_ADMIN_PASSWORD)
+            inputs:
+              azureSubscription: sc-cit-azure
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+
+                cd infrastructure/data
+
+                terraform init
+                terraform apply -auto-approve

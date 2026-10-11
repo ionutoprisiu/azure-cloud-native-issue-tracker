@@ -142,6 +142,12 @@ resource "azurerm_key_vault" "platform" {
   public_network_access_enabled = true
 }
 
+resource "azurerm_role_assignment" "terraform_key_vault_secrets_officer" {
+  scope                = azurerm_key_vault.platform.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
 resource "azurerm_network_security_group" "platform" {
   for_each = local.network_security_groups
 

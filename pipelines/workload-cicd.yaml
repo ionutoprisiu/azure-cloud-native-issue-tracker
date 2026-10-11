@@ -10,8 +10,8 @@ trigger:
 
 resources:
   pipelines:
-    - pipeline: platform
-      source: platform-cicd 
+    - pipeline: data
+      source: data-cicd
       trigger:
         branches:
           include:

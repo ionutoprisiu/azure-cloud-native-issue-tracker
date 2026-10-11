@@ -6,6 +6,6 @@ locals {
     "backend"
   ])
 
-  frontend_image = "hello:latest"
+  frontend_image = "frontend:latest"
   backend_image  = "backend:latest"
 }

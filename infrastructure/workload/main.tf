@@ -54,6 +54,12 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_id         = azurerm_user_assigned_identity.workload[each.key].principal_id
 }
 
+resource "azurerm_role_assignment" "backend_key_vault_secrets_user" {
+  scope                = data.terraform_remote_state.platform.outputs.key_vault_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.workload["backend"].principal_id
+}
+
 resource "azurerm_container_app" "frontend" {
   name                         = "ca-${var.project}-frontend-${var.environment}-${local.region}-001"
   container_app_environment_id = azurerm_container_app_environment.workload["frontend"].id
@@ -118,6 +124,12 @@ resource "azurerm_container_app" "backend" {
     identity = azurerm_user_assigned_identity.workload["backend"].id
   }
 
+  secret {
+    name                = "postgres-password"
+    identity            = azurerm_user_assigned_identity.workload["backend"].id
+    key_vault_secret_id = data.terraform_remote_state.data.outputs.postgresql_password_secret_id
+  }
+
   template {
     container {
       name   = "backend"
@@ -131,12 +143,30 @@ resource "azurerm_container_app" "backend" {
       }
 
       env {
+        name  = "POSTGRES_PORT"
+        value = "5432"
+      }
+
+      env {
         name  = "POSTGRES_DB"
         value = data.terraform_remote_state.data.outputs.postgresql_database_name
       }
+
+      env {
+        name  = "POSTGRES_USER"
+        value = data.terraform_remote_state.data.outputs.postgresql_admin_login
+      }
+
+      env {
+        name        = "POSTGRES_PASSWORD"
+        secret_name = "postgres-password"
+      }
+
+      env {
+        name  = "POSTGRES_SSLMODE"
+        value = "require"
+      }
     }
-
-
   }
 
   ingress {
@@ -150,6 +180,7 @@ resource "azurerm_container_app" "backend" {
   }
 
   depends_on = [
-    azurerm_role_assignment.acr_pull["backend"]
+    azurerm_role_assignment.acr_pull["backend"],
+    azurerm_role_assignment.backend_key_vault_secrets_user
   ]
 }
